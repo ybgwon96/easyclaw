@@ -24,7 +24,18 @@
     "delete": "削除",
     "restartingGw": "Gatewayを再起動中...",
     "errorPrefix": "[エラー] {{msg}}",
-    "settingsBackup": "設定のバックアップ"
+    "settingsBackup": "設定のバックアップ",
+    "gatewayRestarting": "Gatewayを自動再起動中...",
+    "gatewayFailed": "Gateway再起動失敗",
+    "copyDiagnostic": "🔧 診断情報をコピー",
+    "diagnosticCopied": "コピーしました!",
+    "failureModal": {
+      "title": "Gatewayの再起動が5回失敗しました",
+      "body": "診断情報を自動収集しました。カカオグループチャットに貼り付けていただければ、迅速に対応します。",
+      "copy": "クリップボードにコピー",
+      "openKakao": "カカオグループチャットを開く",
+      "retry": "再試行"
+    }
   },
   "uninstall": {
     "title": "OpenClawの削除",

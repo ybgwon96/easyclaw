@@ -24,7 +24,18 @@
     "delete": "삭제",
     "restartingGw": "Gateway 재시작 중...",
     "errorPrefix": "[오류] {{msg}}",
-    "settingsBackup": "설정 백업"
+    "settingsBackup": "설정 백업",
+    "gatewayRestarting": "Gateway 자동 재시작 중...",
+    "gatewayFailed": "Gateway 재시작 실패",
+    "copyDiagnostic": "🔧 진단 정보 복사",
+    "diagnosticCopied": "복사됨!",
+    "failureModal": {
+      "title": "Gateway가 5번 재시작에 실패했어요",
+      "body": "진단 정보를 자동으로 모았습니다. 카카오 단톡방에 붙여넣어 알려주시면 빠르게 해결해드립니다.",
+      "copy": "클립보드 복사",
+      "openKakao": "카카오 단톡방 열기",
+      "retry": "재시도"
+    }
   },
   "uninstall": {
     "title": "OpenClaw 삭제",

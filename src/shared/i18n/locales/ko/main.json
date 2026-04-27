@@ -43,12 +43,17 @@
   "tray": {
     "open": "EasyClaw 열기",
     "gwRunning": "Gateway 실행 중",
+    "gwRestarting": "Gateway 재시작 중...",
+    "gwFailed": "Gateway 실패 (재시작 한도 초과)",
     "gwStopped": "Gateway 중지됨",
     "gwStart": "Gateway 시작",
     "gwStop": "Gateway 중지",
+    "copyDiagnostic": "🔧 진단 정보 복사",
     "quit": "종료",
     "notifyRunning": "Gateway가 실행 중입니다",
     "notifyStopped": "Gateway가 중지되었습니다",
+    "notifyDied": "Gateway가 방금 종료되어 자동 재시작 중입니다",
+    "notifyGaveUp": "Gateway가 5번 재시작에 실패했습니다. 진단 정보를 확인하세요.",
     "tooltipRunning": "EasyClaw - Gateway 실행 중",
     "tooltipStopped": "EasyClaw - Gateway 중지됨"
   },

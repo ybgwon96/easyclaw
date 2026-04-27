@@ -1,6 +1,6 @@
 {
   "name": "easy-claw",
-  "version": "1.3.38",
+  "version": "1.3.39",
   "description": "One-click installer for OpenClaw AI agent",
   "license": "MIT",
   "main": "./out/main/index.js",

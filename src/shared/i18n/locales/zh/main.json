@@ -43,12 +43,17 @@
   "tray": {
     "open": "打开 EasyClaw",
     "gwRunning": "Gateway 运行中",
+    "gwRestarting": "Gateway 重启中...",
+    "gwFailed": "Gateway 失败（已达重启上限）",
     "gwStopped": "Gateway 已停止",
     "gwStart": "启动 Gateway",
     "gwStop": "停止 Gateway",
+    "copyDiagnostic": "🔧 复制诊断信息",
     "quit": "退出",
     "notifyRunning": "Gateway 正在运行",
     "notifyStopped": "Gateway 已停止",
+    "notifyDied": "Gateway 刚刚退出 — 正在自动重启",
+    "notifyGaveUp": "Gateway 重启失败 5 次。请查看诊断信息。",
     "tooltipRunning": "EasyClaw - Gateway 运行中",
     "tooltipStopped": "EasyClaw - Gateway 已停止"
   },

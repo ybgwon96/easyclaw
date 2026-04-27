@@ -5,9 +5,17 @@ import { getPathEnv, findBin } from './path-utils'
 import { WSL_NVM_INIT } from './wsl-utils'
 import { probeAlive } from './gateway-probes'
 import * as logRotator from './gateway-log-rotator'
+import { countAutoInLastHour, recordRestart } from './gateway-restart-history'
 import { t } from '../../shared/i18n/main'
 
-export type GatewayStatus = 'idle' | 'starting' | 'running' | 'stopped' | 'failed'
+export type GatewayStatus =
+  | 'idle'
+  | 'starting'
+  | 'running'
+  | 'restarting'
+  | 'stopped'
+  | 'failed'
+  | 'gave_up'
 
 export interface ExitInfo {
   code: number | null
@@ -25,6 +33,9 @@ interface SupervisorEvents {
   died: (info: ExitInfo) => void
   started: () => void
   failed: (error: string) => void
+  restarting: (payload: { attempt: number; delayMs: number }) => void
+  restarted: () => void
+  gave_up: (payload: { attempts: number }) => void
   'status-changed': (status: GatewayStatus) => void
 }
 
@@ -32,6 +43,11 @@ const HEALTH_LOOP_MS = 5000
 const BOOT_PROBE_INTERVAL_MS = 500
 const BOOT_PROBE_MAX_MS = 15000
 const STDERR_TAIL_LINES = 200
+
+// Backoff schedule for auto-restart attempts after a crash.
+// Index 0 is the first attempt (immediate). Capped at index 4 = 60 s.
+const BACKOFF_SCHEDULE_MS = [0, 2000, 5000, 15000, 60000]
+const MAX_AUTO_RESTARTS_PER_HOUR = 5
 
 const isWindows = platform() === 'win32'
 
@@ -43,6 +59,9 @@ class GatewaySupervisor extends EventEmitter {
   private lastExit: ExitInfo | null = null
   private starting: Promise<StartResult> | null = null
   private stopping: Promise<void> | null = null
+  private gaveUp = false
+  private autoRestartTimer: NodeJS.Timeout | null = null
+  private suppressAutoRestart = false
 
   override on<K extends keyof SupervisorEvents>(event: K, listener: SupervisorEvents[K]): this {
     return super.on(event, listener)
@@ -67,20 +86,34 @@ class GatewaySupervisor extends EventEmitter {
     return probeAlive()
   }
 
-  async start(): Promise<StartResult> {
+  async start(kind: 'manual' | 'auto' = 'manual'): Promise<StartResult> {
+    if (kind === 'manual') {
+      // Manual user action clears the lock so the user can recover from gave_up.
+      this.gaveUp = false
+      this.cancelPendingAutoRestart()
+    }
     if (this.starting) return this.starting
-    this.starting = this.startInternal().finally(() => {
+    this.starting = this.startInternal(kind).finally(() => {
       this.starting = null
     })
     return this.starting
   }
 
   async stop(): Promise<void> {
+    // Treat explicit stop as user intent — do not let a death from the
+    // termination itself trigger auto-restart.
+    this.suppressAutoRestart = true
+    this.cancelPendingAutoRestart()
     if (this.stopping) return this.stopping
     this.stopping = this.stopInternal().finally(() => {
       this.stopping = null
+      this.suppressAutoRestart = false
     })
     return this.stopping
+  }
+
+  isGaveUp(): boolean {
+    return this.gaveUp
   }
 
   async restart(): Promise<StartResult> {
@@ -121,34 +154,70 @@ class GatewaySupervisor extends EventEmitter {
     this.emit('log', msg)
   }
 
-  private async startInternal(): Promise<StartResult> {
+  private async startInternal(kind: 'manual' | 'auto'): Promise<StartResult> {
     if (this.status === 'running' && (await this.isAlive())) {
       return { status: 'started' }
     }
-    this.setStatus('starting')
+    this.setStatus(kind === 'auto' ? 'restarting' : 'starting')
     try {
       const result = isWindows ? await this.startWsl() : await this.startMac()
       if (result.status === 'started') {
         const ok = await this.waitUntilAlive()
         if (!ok) {
           this.setStatus('failed')
+          recordRestart({ ts: Date.now(), kind, success: false })
           this.emit('failed', 'gateway did not become alive within 15s')
           return { status: 'error', error: 'boot probe timeout' }
         }
         this.setStatus('running')
+        recordRestart({
+          ts: Date.now(),
+          kind,
+          success: true,
+          exitCode: this.lastExit?.code ?? null
+        })
         this.emit('started')
+        if (kind === 'auto') this.emit('restarted')
         this.startHealthLoop()
       } else {
         this.setStatus('failed')
+        recordRestart({ ts: Date.now(), kind, success: false })
         this.emit('failed', result.error ?? 'unknown error')
       }
       return result
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       this.setStatus('failed')
+      recordRestart({ ts: Date.now(), kind, success: false })
       this.emit('failed', msg)
       return { status: 'error', error: msg }
     }
+  }
+
+  private cancelPendingAutoRestart(): void {
+    if (this.autoRestartTimer) {
+      clearTimeout(this.autoRestartTimer)
+      this.autoRestartTimer = null
+    }
+  }
+
+  private scheduleAutoRestart(): void {
+    if (this.suppressAutoRestart || this.gaveUp) return
+    if (this.autoRestartTimer) return // already pending
+    const attempts = countAutoInLastHour()
+    if (attempts >= MAX_AUTO_RESTARTS_PER_HOUR) {
+      this.gaveUp = true
+      this.setStatus('gave_up')
+      this.emit('gave_up', { attempts })
+      return
+    }
+    const delayMs = BACKOFF_SCHEDULE_MS[Math.min(attempts, BACKOFF_SCHEDULE_MS.length - 1)]
+    this.emit('restarting', { attempt: attempts + 1, delayMs })
+    this.setStatus('restarting')
+    this.autoRestartTimer = setTimeout(() => {
+      this.autoRestartTimer = null
+      void this.start('auto').catch(() => undefined)
+    }, delayMs)
   }
 
   private async stopInternal(): Promise<void> {
@@ -193,6 +262,7 @@ class GatewaySupervisor extends EventEmitter {
     this.logBoth(t('gateway.processExit', { code: 'unknown' }))
     this.emit('died', this.lastExit)
     this.stopHealthLoop()
+    this.scheduleAutoRestart()
   }
 
   // ---------- macOS adapter ----------
@@ -334,6 +404,7 @@ class GatewaySupervisor extends EventEmitter {
           this.setStatus('stopped')
           this.emit('died', this.lastExit)
           this.stopHealthLoop()
+          this.scheduleAutoRestart()
         }
       })
 

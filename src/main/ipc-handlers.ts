@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, app } from 'electron'
+import { ipcMain, BrowserWindow, app, clipboard } from 'electron'
 import { spawn } from 'child_process'
 import { platform } from 'os'
 import { join } from 'path'
@@ -22,6 +22,8 @@ import {
   getGatewayStatus,
   setGatewayLogCallback
 } from './services/gateway'
+import { getSupervisor } from './services/gateway-supervisor'
+import { collect as collectDiagnostic } from './services/diagnostic-collector'
 import { checkWslState } from './services/wsl-utils'
 import { checkForUpdates, downloadUpdate, installUpdate } from './services/updater'
 import { uninstallOpenClaw } from './services/uninstaller'
@@ -180,6 +182,11 @@ export const registerIpcHandlers = (getWin: () => BrowserWindow | null): void =>
     ) => {
       try {
         const result = await runOnboard(win(), config)
+        // Boot the gateway through the supervisor so DoneStep sees alive
+        // immediately instead of relying on its 30 s polling fallback.
+        await getSupervisor()
+          .start('manual')
+          .catch(() => undefined)
         return { success: true, botUsername: result.botUsername }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
@@ -226,7 +233,10 @@ export const registerIpcHandlers = (getWin: () => BrowserWindow | null): void =>
     ) => {
       try {
         await switchProvider(win(), config)
-        await restartGateway()
+        // switchProvider already kills the daemon and (on macOS) bootstraps
+        // a fresh one. Drive the supervisor lifecycle here so the renderer
+        // observes a single boot transition instead of a stop/start race.
+        await getSupervisor().start('manual')
         return { success: true }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
@@ -279,6 +289,45 @@ export const registerIpcHandlers = (getWin: () => BrowserWindow | null): void =>
   })
 
   ipcMain.handle('gateway:status', () => getGatewayStatus())
+
+  // Push richer supervisor events to the renderer so DoneStep + tray can
+  // distinguish 'restarting' from 'failed' / 'gave_up' without polling.
+  const supervisor = getSupervisor()
+  const broadcast = (event: string, payload?: unknown): void => {
+    try {
+      win().webContents.send(event, payload)
+    } catch {
+      /* window destroyed */
+    }
+  }
+  supervisor.on('status-changed', (status) => broadcast('gateway:status-changed', { status }))
+  supervisor.on('restarting', (payload) => broadcast('gateway:restarting', payload))
+  supervisor.on('restarted', () => broadcast('gateway:restarted'))
+  supervisor.on('gave_up', (payload) => broadcast('gateway:gave-up', payload))
+  supervisor.on('died', (info) => broadcast('gateway:died', info))
+
+  // Diagnostic — collects stderr / stdout / restart history / platform info
+  // into a single PII-masked text block the user can paste into the Kakao
+  // group chat.
+  ipcMain.handle('diagnostic:collect', async () => {
+    try {
+      return await collectDiagnostic()
+    } catch (e) {
+      return {
+        timestamp: Date.now(),
+        text: `<diagnostic collector failed: ${e instanceof Error ? e.message : String(e)}>`
+      }
+    }
+  })
+
+  ipcMain.handle('diagnostic:copy', (_e, text: string) => {
+    try {
+      clipboard.writeText(text)
+      return { success: true }
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
 
   ipcMain.handle('troubleshoot:check-port', () => checkPort())
   ipcMain.handle('troubleshoot:doctor-fix', () => runDoctorFix(win()))

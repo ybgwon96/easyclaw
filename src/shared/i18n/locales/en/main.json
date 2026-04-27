@@ -43,12 +43,17 @@
   "tray": {
     "open": "Open EasyClaw",
     "gwRunning": "Gateway Running",
+    "gwRestarting": "Gateway Restarting...",
+    "gwFailed": "Gateway Failed (max restarts reached)",
     "gwStopped": "Gateway Stopped",
     "gwStart": "Start Gateway",
     "gwStop": "Stop Gateway",
+    "copyDiagnostic": "🔧 Copy Diagnostic Info",
     "quit": "Quit",
     "notifyRunning": "Gateway is running",
     "notifyStopped": "Gateway has stopped",
+    "notifyDied": "Gateway just exited — auto-restarting now",
+    "notifyGaveUp": "Gateway failed to restart 5 times. Check the diagnostic info.",
     "tooltipRunning": "EasyClaw - Gateway Running",
     "tooltipStopped": "EasyClaw - Gateway Stopped"
   },

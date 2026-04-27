@@ -24,7 +24,18 @@
     "delete": "Delete",
     "restartingGw": "Restarting Gateway...",
     "errorPrefix": "[Error] {{msg}}",
-    "settingsBackup": "Settings Backup"
+    "settingsBackup": "Settings Backup",
+    "gatewayRestarting": "Gateway auto-restarting...",
+    "gatewayFailed": "Gateway restart failed",
+    "copyDiagnostic": "🔧 Copy Diagnostic Info",
+    "diagnosticCopied": "Copied!",
+    "failureModal": {
+      "title": "Gateway failed to restart 5 times",
+      "body": "Diagnostic info was collected automatically. Paste it into the Kakao group chat and we'll get back to you quickly.",
+      "copy": "Copy to Clipboard",
+      "openKakao": "Open Kakao Group Chat",
+      "retry": "Retry"
+    }
   },
   "uninstall": {
     "title": "Uninstall OpenClaw",

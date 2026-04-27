@@ -61,11 +61,46 @@ const electronAPI = {
       ipcRenderer.on('gateway:log', handler)
       return () => ipcRenderer.removeListener('gateway:log', handler)
     },
-    onStatusChanged: (cb: (status: 'running' | 'stopped') => void): (() => void) => {
-      const handler = (_: unknown, s: 'running' | 'stopped'): void => cb(s)
+    onStatusChanged: (
+      cb: (payload: {
+        status: 'idle' | 'starting' | 'running' | 'restarting' | 'stopped' | 'failed' | 'gave_up'
+      }) => void
+    ): (() => void) => {
+      const handler = (
+        _: unknown,
+        payload: {
+          status: 'idle' | 'starting' | 'running' | 'restarting' | 'stopped' | 'failed' | 'gave_up'
+        }
+      ): void => cb(payload)
       ipcRenderer.on('gateway:status-changed', handler)
       return () => ipcRenderer.removeListener('gateway:status-changed', handler)
+    },
+    onRestarting: (cb: (payload: { attempt: number; delayMs: number }) => void): (() => void) => {
+      const handler = (_: unknown, p: { attempt: number; delayMs: number }): void => cb(p)
+      ipcRenderer.on('gateway:restarting', handler)
+      return () => ipcRenderer.removeListener('gateway:restarting', handler)
+    },
+    onRestarted: (cb: () => void): (() => void) => {
+      const handler = (): void => cb()
+      ipcRenderer.on('gateway:restarted', handler)
+      return () => ipcRenderer.removeListener('gateway:restarted', handler)
+    },
+    onGaveUp: (cb: (payload: { attempts: number }) => void): (() => void) => {
+      const handler = (_: unknown, p: { attempts: number }): void => cb(p)
+      ipcRenderer.on('gateway:gave-up', handler)
+      return () => ipcRenderer.removeListener('gateway:gave-up', handler)
+    },
+    onDied: (cb: (info: { code: number | null; ts: number }) => void): (() => void) => {
+      const handler = (_: unknown, info: { code: number | null; ts: number }): void => cb(info)
+      ipcRenderer.on('gateway:died', handler)
+      return () => ipcRenderer.removeListener('gateway:died', handler)
     }
+  },
+  diagnostic: {
+    collect: (): Promise<{ timestamp: number; text: string }> =>
+      ipcRenderer.invoke('diagnostic:collect'),
+    copy: (text: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('diagnostic:copy', text)
   },
   troubleshoot: {
     checkPort: (): Promise<{ inUse: boolean; pid?: string }> =>

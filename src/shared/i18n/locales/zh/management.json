@@ -24,7 +24,18 @@
     "delete": "删除",
     "restartingGw": "正在重启 Gateway...",
     "errorPrefix": "[错误] {{msg}}",
-    "settingsBackup": "配置备份"
+    "settingsBackup": "配置备份",
+    "gatewayRestarting": "Gateway 正在自动重启...",
+    "gatewayFailed": "Gateway 重启失败",
+    "copyDiagnostic": "🔧 复制诊断信息",
+    "diagnosticCopied": "已复制!",
+    "failureModal": {
+      "title": "Gateway 重启失败 5 次",
+      "body": "已自动收集诊断信息。请粘贴到 Kakao 群聊中，我们将尽快为您处理。",
+      "copy": "复制到剪贴板",
+      "openKakao": "打开 Kakao 群聊",
+      "retry": "重试"
+    }
   },
   "uninstall": {
     "title": "删除 OpenClaw",

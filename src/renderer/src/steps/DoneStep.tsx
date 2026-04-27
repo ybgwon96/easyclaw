@@ -6,6 +6,7 @@ import Button from '../components/Button'
 import LogViewer from '../components/LogViewer'
 import ManagementModal from '../components/ManagementModal'
 import ProviderSwitchModal from '../components/ProviderSwitchModal'
+import DiagnosticModal from '../components/DiagnosticModal'
 import LanguageSwitcher from '../components/LanguageSwitcher'
 import { useManagement } from '../hooks/useManagement'
 
@@ -22,6 +23,8 @@ export default function DoneStep({
 }): React.JSX.Element {
   const { t } = useTranslation('management')
   const [status, setStatus] = useState<'starting' | 'running' | 'stopped'>('starting')
+  const [gatewayHealth, setGatewayHealth] = useState<'healthy' | 'restarting' | 'failed'>('healthy')
+  const [showDiagnosticModal, setShowDiagnosticModal] = useState(false)
   const [hasError, setHasError] = useState(false)
   const [logs, setLogs] = useState<string[]>([])
   const [showLogs, setShowLogs] = useState(false)
@@ -132,10 +135,32 @@ export default function DoneStep({
 
   // Subscribe to Gateway status changes from tray
   useEffect(() => {
-    const unsub = window.electronAPI.gateway.onStatusChanged((s) => {
+    const unsub = window.electronAPI.gateway.onStatusChanged(({ status: s }) => {
       setStatus(s === 'running' ? 'running' : 'stopped')
+      if (s === 'running') setGatewayHealth('healthy')
+      else if (s === 'restarting') setGatewayHealth('restarting')
+      else if (s === 'failed' || s === 'gave_up') setGatewayHealth('failed')
     })
     return unsub
+  }, [])
+
+  // Subscribe to richer supervisor events for restart UX + failure modal
+  useEffect(() => {
+    const unsubRestarting = window.electronAPI.gateway.onRestarting(() => {
+      setGatewayHealth('restarting')
+    })
+    const unsubRestarted = window.electronAPI.gateway.onRestarted(() => {
+      setGatewayHealth('healthy')
+    })
+    const unsubGaveUp = window.electronAPI.gateway.onGaveUp(() => {
+      setGatewayHealth('failed')
+      setShowDiagnosticModal(true)
+    })
+    return () => {
+      unsubRestarting()
+      unsubRestarted()
+      unsubGaveUp()
+    }
   }, [])
 
   useEffect(() => {
@@ -412,6 +437,13 @@ export default function DoneStep({
           <span className="text-[11px] font-bold flex-1 text-left">{t('done.restore')}</span>
         </button>
         <button
+          onClick={() => setShowDiagnosticModal(true)}
+          className="glass-card flex items-center gap-2 px-3 py-2 cursor-pointer hover:border-primary/40 transition-all duration-200"
+        >
+          <span className="text-sm">🔧</span>
+          <span className="text-[11px] font-bold flex-1 text-left">{t('done.copyDiagnostic')}</span>
+        </button>
+        <button
           onClick={uninstall.open}
           className="glass-card flex items-center gap-2 px-3 py-2 cursor-pointer hover:border-error/40 transition-all duration-200"
         >
@@ -421,6 +453,34 @@ export default function DoneStep({
           </span>
         </button>
       </div>
+
+      {/* ─── Auto-restart / failure banner ─── */}
+      {gatewayHealth === 'restarting' && (
+        <div className="w-full max-w-md bg-warning/10 border border-warning/30 rounded-md px-3 py-2">
+          <p className="text-xs text-warning">{t('done.gatewayRestarting')}</p>
+        </div>
+      )}
+      {gatewayHealth === 'failed' && (
+        <div className="w-full max-w-md bg-error/10 border border-error/30 rounded-md px-3 py-2 flex items-center justify-between gap-3">
+          <p className="text-xs text-error">{t('done.gatewayFailed')}</p>
+          <Button variant="secondary" size="sm" onClick={() => setShowDiagnosticModal(true)}>
+            {t('done.copyDiagnostic')}
+          </Button>
+        </div>
+      )}
+
+      <DiagnosticModal
+        open={showDiagnosticModal}
+        onClose={() => setShowDiagnosticModal(false)}
+        onRetry={async () => {
+          setShowDiagnosticModal(false)
+          setGatewayHealth('healthy')
+          setStatus('starting')
+          const r = await window.electronAPI.gateway.start()
+          setStatus(r.success ? 'running' : 'stopped')
+          if (!r.success) setGatewayHealth('failed')
+        }}
+      />
 
       {/* ─── Uninstall modal ─── */}
       {uninstall.modal && (

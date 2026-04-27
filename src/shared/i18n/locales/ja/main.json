@@ -43,12 +43,17 @@
   "tray": {
     "open": "EasyClawを開く",
     "gwRunning": "Gateway実行中",
+    "gwRestarting": "Gateway再起動中...",
+    "gwFailed": "Gateway失敗（再起動回数上限）",
     "gwStopped": "Gateway停止中",
     "gwStart": "Gatewayを開始",
     "gwStop": "Gatewayを停止",
+    "copyDiagnostic": "🔧 診断情報をコピー",
     "quit": "終了",
     "notifyRunning": "Gatewayが実行中です",
     "notifyStopped": "Gatewayが停止しました",
+    "notifyDied": "Gatewayが終了しました。自動再起動中です",
+    "notifyGaveUp": "Gatewayの再起動が5回失敗しました。診断情報を確認してください。",
     "tooltipRunning": "EasyClaw - Gateway実行中",
     "tooltipStopped": "EasyClaw - Gateway停止中"
   },

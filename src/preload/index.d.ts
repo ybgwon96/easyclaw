@@ -51,7 +51,19 @@ interface ElectronAPI {
     restart: () => Promise<{ success: boolean; error?: string }>
     status: () => Promise<'running' | 'stopped'>
     onLog: (cb: (msg: string) => void) => () => void
-    onStatusChanged: (cb: (status: 'running' | 'stopped') => void) => () => void
+    onStatusChanged: (
+      cb: (payload: {
+        status: 'idle' | 'starting' | 'running' | 'restarting' | 'stopped' | 'failed' | 'gave_up'
+      }) => void
+    ) => () => void
+    onRestarting: (cb: (payload: { attempt: number; delayMs: number }) => void) => () => void
+    onRestarted: (cb: () => void) => () => void
+    onGaveUp: (cb: (payload: { attempts: number }) => void) => () => void
+    onDied: (cb: (info: { code: number | null; ts: number }) => void) => () => void
+  }
+  diagnostic: {
+    collect: () => Promise<{ timestamp: number; text: string }>
+    copy: (text: string) => Promise<{ success: boolean; error?: string }>
   }
   troubleshoot: {
     checkPort: () => Promise<{ inUse: boolean; pid?: string }>
