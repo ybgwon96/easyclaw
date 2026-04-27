@@ -9,6 +9,7 @@ out/
 .DS_Store
 Thumbs.db
 .eslintcache
+.worktrees/
 .vercel
 *.key
 *.csr
