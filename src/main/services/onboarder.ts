@@ -4,9 +4,26 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from '
 import { platform, homedir } from 'os'
 import { join } from 'path'
 import https from 'https'
-import { BrowserWindow } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import { runInWsl, readWslFile, writeWslFile, WSL_NVM_INIT } from './wsl-utils'
 import { t } from '../../shared/i18n/main'
+
+const launchdLogPaths = (): { logsDir: string; stdoutPath: string; stderrPath: string } => {
+  const logsDir = join(app.getPath('userData'), 'logs')
+  return {
+    logsDir,
+    stdoutPath: join(logsDir, 'launchd-gateway.out.log'),
+    stderrPath: join(logsDir, 'launchd-gateway.err.log')
+  }
+}
+
+const ensureDir = (dir: string): void => {
+  try {
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+  } catch {
+    /* best effort — launchd will surface errors if path is unwritable */
+  }
+}
 
 interface OnboardConfig {
   provider: 'anthropic' | 'google' | 'openai' | 'minimax' | 'glm' | 'deepseek' | 'ollama'
@@ -114,7 +131,7 @@ const createRunCmd = (): ((
     })
 }
 
-const wslKillOpenclaw = (): Promise<void> =>
+export const wslKillOpenclaw = (): Promise<void> =>
   new Promise((resolve) => {
     const child = spawn('wsl', [
       '-d',
@@ -130,6 +147,50 @@ const wslKillOpenclaw = (): Promise<void> =>
     child.on('close', () => resolve())
     child.on('error', () => resolve())
   })
+
+// Patch launchd plist to capture daemon stdout/stderr to disk so EasyClaw
+// can show recent crash output to the user. Idempotent — bails when keys
+// are already present. Run once at app startup for upgraders.
+export const migrateGatewayPlist = async (): Promise<void> => {
+  if (platform() !== 'darwin') return
+  const plistPath = join(homedir(), 'Library', 'LaunchAgents', 'ai.openclaw.gateway.plist')
+  if (!existsSync(plistPath)) return
+  let xml: string
+  try {
+    xml = readFileSync(plistPath, 'utf-8')
+  } catch {
+    return
+  }
+  if (xml.includes('StandardOutPath')) return
+
+  const { logsDir, stdoutPath, stderrPath } = launchdLogPaths()
+  ensureDir(logsDir)
+
+  const insertion =
+    `<key>StandardOutPath</key>\n  <string>${stdoutPath}</string>\n` +
+    `  <key>StandardErrorPath</key>\n  <string>${stderrPath}</string>\n  `
+  const patched = xml.replace(/<\/dict>\s*<\/plist>/, `${insertion}</dict>\n</plist>`)
+  if (patched === xml) return
+
+  try {
+    writeFileSync(plistPath, patched)
+  } catch {
+    return
+  }
+
+  const uid = process.getuid?.() ?? ''
+  await new Promise<void>((resolve) => {
+    const child = spawn('launchctl', ['bootout', `gui/${uid}/ai.openclaw.gateway`])
+    child.on('close', () => resolve())
+    child.on('error', () => resolve())
+  })
+  await new Promise((r) => setTimeout(r, 500))
+  await new Promise<void>((resolve) => {
+    const child = spawn('launchctl', ['bootstrap', `gui/${uid}`, plistPath])
+    child.on('close', () => resolve())
+    child.on('error', () => resolve())
+  })
+}
 
 export const runOnboard = async (
   win: BrowserWindow,
@@ -384,6 +445,14 @@ export const runOnboard = async (
           '</dict>\n  </dict>',
           `<key>NODE_OPTIONS</key>\n    <string>${nodeOpt}</string>\n    </dict>\n  </dict>`
         )
+      }
+      if (!xml.includes('StandardOutPath')) {
+        const { logsDir, stdoutPath, stderrPath } = launchdLogPaths()
+        ensureDir(logsDir)
+        const insertion =
+          `<key>StandardOutPath</key>\n  <string>${stdoutPath}</string>\n` +
+          `  <key>StandardErrorPath</key>\n  <string>${stderrPath}</string>\n  `
+        xml = xml.replace(/<\/dict>\s*<\/plist>/, `${insertion}</dict>\n</plist>`)
       }
       writeFileSync(plistAfter, xml)
     }
