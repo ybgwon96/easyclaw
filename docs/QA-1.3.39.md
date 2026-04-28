@@ -60,10 +60,13 @@ on both macOS and Windows (WSL) before tagging the release.
 - [ ] Create a 60 MB fake log to exceed cap — oldest files trimmed first
 
 ## S7 — PII masking
-- [ ] Trigger a crash with a fake bot token in the daemon stderr
-      (e.g., set `TELEGRAM_BOT_TOKEN=bot1234567890:AAFAKEkeyABCDEFGHIJKLMNOPQRSTUVWXYZ`)
-- [ ] Open DiagnosticModal — token shown as `bot1234567890:****MASKED****`
-- [ ] Same check for `sk-...`, `sk-ant-...`, `AIza...` patterns
+- [ ] Trigger a crash with a placeholder bot token in the daemon stderr
+      (set `TELEGRAM_BOT_TOKEN=bot<DIGITS>:<35+_TOKEN_CHARS>` shaped to match
+      the regex `bot([0-9]+):[A-Za-z0-9_-]{30,}`)
+- [ ] Open DiagnosticModal — the digits part is preserved while the token
+      part is shown as `****MASKED****`
+- [ ] Same check for `sk-...`, `sk-ant-...`, `AIza...` patterns (use any
+      string matching the shape; do not paste a real key)
 
 ## Sign-off
 - [ ] macOS results captured in screenshots / paste of diagnostic text
