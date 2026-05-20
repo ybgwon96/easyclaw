@@ -54,6 +54,7 @@
     "notifyStopped": "Gateway가 중지되었습니다",
     "notifyDied": "Gateway가 방금 종료되어 자동 재시작 중입니다",
     "notifyGaveUp": "Gateway가 5번 재시작에 실패했습니다. 진단 정보를 확인하세요.",
+    "notifyOcUpdated": "OpenClaw가 v{{from}}에서 v{{to}}로 업데이트되었습니다",
     "tooltipRunning": "EasyClaw - Gateway 실행 중",
     "tooltipStopped": "EasyClaw - Gateway 중지됨"
   },

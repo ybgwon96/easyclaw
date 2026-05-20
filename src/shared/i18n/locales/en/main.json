@@ -54,6 +54,7 @@
     "notifyStopped": "Gateway has stopped",
     "notifyDied": "Gateway just exited — auto-restarting now",
     "notifyGaveUp": "Gateway failed to restart 5 times. Check the diagnostic info.",
+    "notifyOcUpdated": "OpenClaw updated from v{{from}} to v{{to}}",
     "tooltipRunning": "EasyClaw - Gateway Running",
     "tooltipStopped": "EasyClaw - Gateway Stopped"
   },

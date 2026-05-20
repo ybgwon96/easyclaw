@@ -54,6 +54,7 @@
     "notifyStopped": "Gateway 已停止",
     "notifyDied": "Gateway 刚刚退出 — 正在自动重启",
     "notifyGaveUp": "Gateway 重启失败 5 次。请查看诊断信息。",
+    "notifyOcUpdated": "OpenClaw 已从 v{{from}} 更新至 v{{to}}",
     "tooltipRunning": "EasyClaw - Gateway 运行中",
     "tooltipStopped": "EasyClaw - Gateway 已停止"
   },

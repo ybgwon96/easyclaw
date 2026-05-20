@@ -40,6 +40,11 @@ export default function DoneStep({
   } | null>(null)
   const [updating, setUpdating] = useState(false)
   const [updateLogs, setUpdateLogs] = useState<string[]>([])
+  const [autoUpdateInfo, setAutoUpdateInfo] = useState<{ from: string; to: string } | null>(null)
+  const [autoUpdatedNotice, setAutoUpdatedNotice] = useState<{ from: string; to: string } | null>(
+    null
+  )
+  const [autoUpdateError, setAutoUpdateError] = useState<string | null>(null)
   const updateCheckedRef = useRef(false)
 
   const tRef = useRef<TFunction>(t)
@@ -73,6 +78,39 @@ export default function DoneStep({
     const timer = setInterval(checkOpenclawUpdate, UPDATE_CHECK_INTERVAL)
     return () => clearInterval(timer)
   }, [status, checkOpenclawUpdate])
+
+  // Subscribe to background OpenClaw auto-update events
+  useEffect(() => {
+    const unsubStarted = window.electronAPI.openclaw.onAutoUpdateStarted((info) => {
+      setAutoUpdateInfo(info)
+      setUpdateLogs([])
+      setOpenclawUpdate(null)
+      setAutoUpdatedNotice(null)
+      setAutoUpdateError(null)
+    })
+    const unsubProgress = window.electronAPI.openclaw.onAutoUpdateProgress((msg) => {
+      if (msg) setUpdateLogs((prev) => [...prev, msg])
+    })
+    const unsubDone = window.electronAPI.openclaw.onAutoUpdateDone((info) => {
+      setAutoUpdateInfo(null)
+      setAutoUpdatedNotice(info)
+      setOpenclawUpdate(null)
+      setAutoUpdateError(null)
+      setTimeout(() => setAutoUpdatedNotice(null), 10_000)
+    })
+    const unsubError = window.electronAPI.openclaw.onAutoUpdateError((errMsg) => {
+      setAutoUpdateInfo(null)
+      setAutoUpdateError(errMsg || 'unknown error')
+      // Re-check so the manual "Update" button reappears for a retry
+      void checkOpenclawUpdate()
+    })
+    return () => {
+      unsubStarted()
+      unsubProgress()
+      unsubDone()
+      unsubError()
+    }
+  }, [checkOpenclawUpdate])
 
   // Execute OpenClaw update
   const handleOpenclawUpdate = useCallback(async () => {
@@ -292,11 +330,49 @@ export default function DoneStep({
       </div>
 
       {/* OpenClaw update banner */}
-      {(openclawUpdate || updating) && (
-        <div className="w-full max-w-md flex items-center gap-3 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500/15 via-blue-500/10 to-blue-500/15 border border-blue-500/30">
-          <span className="text-base">{updating ? '⏳' : '🔄'}</span>
+      {(openclawUpdate || updating || autoUpdateInfo || autoUpdatedNotice || autoUpdateError) && (
+        <div
+          className={`w-full max-w-md flex items-center gap-3 px-4 py-2 rounded-xl border ${
+            autoUpdateError
+              ? 'bg-gradient-to-r from-error/15 via-error/10 to-error/15 border-error/30'
+              : autoUpdatedNotice
+                ? 'bg-gradient-to-r from-success/15 via-success/10 to-success/15 border-success/30'
+                : 'bg-gradient-to-r from-blue-500/15 via-blue-500/10 to-blue-500/15 border-blue-500/30'
+          }`}
+        >
+          <span className="text-base">
+            {autoUpdateError
+              ? '⚠️'
+              : autoUpdatedNotice
+                ? '✅'
+                : updating || autoUpdateInfo
+                  ? '⏳'
+                  : '🔄'}
+          </span>
           <div className="flex-1 min-w-0">
-            {updating ? (
+            {autoUpdateError ? (
+              <span className="text-[12px] font-bold text-error">
+                {t('done.ocAutoUpdateFailed', { msg: autoUpdateError })}
+              </span>
+            ) : autoUpdatedNotice ? (
+              <span className="text-[12px] font-bold">
+                {t('done.ocAutoUpdated', {
+                  from: autoUpdatedNotice.from,
+                  to: autoUpdatedNotice.to
+                })}
+              </span>
+            ) : autoUpdateInfo ? (
+              <div>
+                <span className="text-[12px] font-bold">
+                  {t('done.ocAutoUpdating', { to: autoUpdateInfo.to })}
+                </span>
+                {updateLogs.length > 0 && (
+                  <p className="text-[11px] text-text-muted/70 truncate">
+                    {updateLogs[updateLogs.length - 1]}
+                  </p>
+                )}
+              </div>
+            ) : updating ? (
               <div>
                 <span className="text-[12px] font-bold">{t('common:status.updating')}</span>
                 {updateLogs.length > 0 && (
@@ -314,14 +390,20 @@ export default function DoneStep({
               </span>
             )}
           </div>
-          {!updating && (
-            <button
-              onClick={handleOpenclawUpdate}
-              className="px-3 py-1 text-[11px] font-bold rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-all duration-200 cursor-pointer whitespace-nowrap"
-            >
-              {t('common:button.update')}
-            </button>
-          )}
+          {!updating &&
+            !autoUpdateInfo &&
+            !autoUpdatedNotice &&
+            (openclawUpdate || autoUpdateError) && (
+              <button
+                onClick={() => {
+                  setAutoUpdateError(null)
+                  handleOpenclawUpdate()
+                }}
+                className="px-3 py-1 text-[11px] font-bold rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-all duration-200 cursor-pointer whitespace-nowrap"
+              >
+                {t('common:button.update')}
+              </button>
+            )}
         </div>
       )}
 

@@ -4,6 +4,7 @@ import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { registerIpcHandlers, getSavedLocale } from './ipc-handlers'
 import { createTray, startPolling, destroyTray } from './services/tray-manager'
 import { setupAutoUpdater, checkForUpdates } from './services/updater'
+import { startOpenclawAutoUpdate, stopOpenclawAutoUpdate } from './services/openclaw-updater'
 import { startGateway } from './services/gateway'
 import { getSupervisor } from './services/gateway-supervisor'
 import { migrateGatewayPlist } from './services/onboarder'
@@ -86,6 +87,7 @@ const runQuitCleanup = async (): Promise<void> => {
   if (cleanupRan) return
   cleanupRan = true
   writeGatewayLog('meta', 'app quit — cleanup start')
+  stopOpenclawAutoUpdate()
   try {
     const stopPromise = getSupervisor().stop()
     const timeoutPromise = new Promise<void>((resolve) => setTimeout(resolve, 3000))
@@ -131,9 +133,12 @@ app.whenReady().then(async () => {
   })
   startPolling()
 
-  // Auto update
+  // Auto update (EasyClaw app)
   setupAutoUpdater(getWin)
   setTimeout(checkForUpdates, 5000)
+
+  // Auto update (OpenClaw npm package, background)
+  startOpenclawAutoUpdate(getWin)
 
   app.on('activate', () => {
     if (mainWindow) {

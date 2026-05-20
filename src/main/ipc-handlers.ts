@@ -29,6 +29,7 @@ import { checkForUpdates, downloadUpdate, installUpdate } from './services/updat
 import { uninstallOpenClaw } from './services/uninstaller'
 import { exportBackup, importBackup } from './services/backup'
 import { loginOpenAICodex } from './services/oauth'
+import { triggerOpenclawUpdateNow, isOpenclawUpdating } from './services/openclaw-updater'
 
 interface WizardPersistedState {
   step: string
@@ -75,6 +76,10 @@ export const registerIpcHandlers = (getWin: () => BrowserWindow | null): void =>
 
   ipcMain.handle('env:check', () => checkEnvironment())
   ipcMain.handle('openclaw:check-update', () => checkOpenclawUpdate())
+  ipcMain.handle('openclaw:auto-update-now', async () => {
+    await triggerOpenclawUpdateNow(getWin)
+    return { success: true }
+  })
 
   // WSL-related IPC
   ipcMain.handle('wsl:check', () => checkWslState())
@@ -150,6 +155,9 @@ export const registerIpcHandlers = (getWin: () => BrowserWindow | null): void =>
   })
 
   ipcMain.handle('install:openclaw', async () => {
+    if (isOpenclawUpdating()) {
+      return { success: false, error: 'auto-update-in-progress' }
+    }
     try {
       if (platform() === 'win32') {
         await installOpenClawWsl(win())

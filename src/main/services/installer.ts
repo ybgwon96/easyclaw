@@ -5,7 +5,13 @@ import { tmpdir, homedir } from 'os'
 import { join } from 'path'
 import https from 'https'
 import { BrowserWindow } from 'electron'
-import { checkWslState, runInWsl, WSL_STATE_ORDER, type WslState } from './wsl-utils'
+import {
+  checkWslState,
+  runInWsl,
+  runInWslStreaming,
+  WSL_STATE_ORDER,
+  type WslState
+} from './wsl-utils'
 import { getPathEnv } from './path-utils'
 import { t } from '../../shared/i18n/main'
 
@@ -197,11 +203,22 @@ export const installNodeWsl = async (win: BrowserWindow): Promise<void> => {
   log(t('installer.nodeWslDone'))
 }
 
+/**
+ * Reusable WSL install core — streams logs to onLine. Used by both the
+ * interactive installer flow and the background auto-update path.
+ */
+export const installOpenClawWslCore = async (
+  onLine: (msg: string) => void,
+  timeoutMs = 300_000
+): Promise<void> => {
+  await runInWslStreaming('npm install -g openclaw@latest', onLine, timeoutMs)
+}
+
 /** Install openclaw globally inside WSL Ubuntu */
 export const installOpenClawWsl = async (win: BrowserWindow): Promise<void> => {
   const log = (msg: string): void => sendProgress(win, msg)
   log(t('installer.ocWslInstalling'))
-  await runInWsl('npm install -g openclaw@latest', 120000)
+  await installOpenClawWslCore(log)
   log(t('installer.ocWslDone'))
 }
 
@@ -245,25 +262,37 @@ const ensureXcodeCli = async (log: ProgressCallback): Promise<void> => {
   throw new Error(t('installer.xcodeTimeout'))
 }
 
+/**
+ * Reusable macOS install core — handles npm cache permission fix and prefix
+ * config before running npm install. Streams logs to onLine. Used by both
+ * the interactive installer flow and the background auto-update path.
+ *
+ * Does NOT run ensureXcodeCli — that requires user interaction and should
+ * only happen in the interactive flow.
+ */
+export const installOpenClawMacCore = async (onLine: (msg: string) => void): Promise<void> => {
+  const npmCacheDir = join(homedir(), '.npm')
+  if (existsSync(npmCacheDir)) {
+    const uid = process.getuid?.() ?? 501
+    const gid = process.getgid?.() ?? 20
+    await runWithLog('chown', ['-R', `${uid}:${gid}`, npmCacheDir], onLine).catch(() => {})
+  }
+  const npmGlobalDir = join(homedir(), '.npm-global')
+  if (!existsSync(npmGlobalDir)) mkdirSync(npmGlobalDir, { recursive: true })
+  await runWithLog('npm', ['config', 'set', 'prefix', npmGlobalDir], onLine, {
+    env: getPathEnv()
+  })
+  await runWithLog('npm', ['install', '-g', 'openclaw@latest'], onLine, {
+    env: getPathEnv()
+  })
+}
+
 export const installOpenClaw = async (win: BrowserWindow): Promise<void> => {
   const log = (msg: string): void => sendProgress(win, msg)
   log(t('installer.ocInstalling'))
 
   await ensureXcodeCli(log)
-  const npmCacheDir = join(homedir(), '.npm')
-  if (existsSync(npmCacheDir)) {
-    const uid = process.getuid?.() ?? 501
-    const gid = process.getgid?.() ?? 20
-    await runWithLog('chown', ['-R', `${uid}:${gid}`, npmCacheDir], log).catch(() => {})
-  }
-  const npmGlobalDir = join(homedir(), '.npm-global')
-  if (!existsSync(npmGlobalDir)) mkdirSync(npmGlobalDir, { recursive: true })
-  await runWithLog('npm', ['config', 'set', 'prefix', npmGlobalDir], log, {
-    env: getPathEnv()
-  })
-  await runWithLog('npm', ['install', '-g', 'openclaw@latest'], log, {
-    env: getPathEnv()
-  })
+  await installOpenClawMacCore(log)
 
   log(t('installer.ocDone'))
 }

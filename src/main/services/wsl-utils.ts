@@ -126,6 +126,55 @@ export const runInWsl = (script: string, timeout = 30000): Promise<string> =>
     })
   })
 
+/**
+ * Like runInWsl but streams stdout/stderr line by line to onLine.
+ * Returns when the process closes. Rejects on non-zero exit or timeout.
+ */
+export const runInWslStreaming = (
+  script: string,
+  onLine: (line: string) => void,
+  timeout = 30000
+): Promise<void> =>
+  new Promise((resolve, reject) => {
+    const child = spawn('wsl', [
+      '-d',
+      WSL_DISTRO,
+      '-u',
+      WSL_USER,
+      '--',
+      'bash',
+      '-lc',
+      WSL_NVM_INIT + script
+    ])
+    const timer = setTimeout(() => {
+      child.kill()
+      reject(new Error('timeout'))
+    }, timeout)
+    let stderrBuf = ''
+    const flush = (chunk: string): void => {
+      const lines = chunk.replace(/\0/g, '').split(/\r?\n/)
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (trimmed) onLine(trimmed)
+      }
+    }
+    child.stdout.on('data', (d) => flush(d.toString()))
+    child.stderr.on('data', (d) => {
+      const s = d.toString()
+      stderrBuf += s
+      flush(s)
+    })
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      if (code === 0) resolve()
+      else reject(new Error(stderrBuf.replace(/\0/g, '').trim() || `exit ${code}`))
+    })
+    child.on('error', (err) => {
+      clearTimeout(timer)
+      reject(err)
+    })
+  })
+
 /** Read file inside WSL */
 export const readWslFile = (path: string): Promise<string> =>
   new Promise((resolve, reject) => {

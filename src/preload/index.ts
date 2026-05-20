@@ -174,7 +174,29 @@ const electronAPI = {
   },
   openclaw: {
     checkUpdate: (): Promise<{ currentVersion: string | null; latestVersion: string | null }> =>
-      ipcRenderer.invoke('openclaw:check-update')
+      ipcRenderer.invoke('openclaw:check-update'),
+    autoUpdateNow: (): Promise<{ success: boolean }> =>
+      ipcRenderer.invoke('openclaw:auto-update-now'),
+    onAutoUpdateStarted: (cb: (info: { from: string; to: string }) => void): (() => void) => {
+      const handler = (_: unknown, info: { from: string; to: string }): void => cb(info)
+      ipcRenderer.on('openclaw:auto-update-started', handler)
+      return () => ipcRenderer.removeListener('openclaw:auto-update-started', handler)
+    },
+    onAutoUpdateProgress: (cb: (msg: string) => void): (() => void) => {
+      const handler = (_: unknown, payload: { msg?: string }): void => cb(payload.msg ?? '')
+      ipcRenderer.on('openclaw:auto-update-progress', handler)
+      return () => ipcRenderer.removeListener('openclaw:auto-update-progress', handler)
+    },
+    onAutoUpdateDone: (cb: (info: { from: string; to: string }) => void): (() => void) => {
+      const handler = (_: unknown, info: { from: string; to: string }): void => cb(info)
+      ipcRenderer.on('openclaw:auto-update-done', handler)
+      return () => ipcRenderer.removeListener('openclaw:auto-update-done', handler)
+    },
+    onAutoUpdateError: (cb: (msg: string) => void): (() => void) => {
+      const handler = (_: unknown, payload: { error?: string }): void => cb(payload.error ?? '')
+      ipcRenderer.on('openclaw:auto-update-error', handler)
+      return () => ipcRenderer.removeListener('openclaw:auto-update-error', handler)
+    }
   },
   autoLaunch: {
     get: (): Promise<{ enabled: boolean }> => ipcRenderer.invoke('autolaunch:get'),
